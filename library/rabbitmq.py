@@ -11,7 +11,7 @@ DOCUMENTATION = """
     lookup: rabbitmq
     author: John Imison <@Im0>
     version_added: "2.8"
-    short_description: Retrieve messages from an AMQP/AMQPS RabbitMQ queue/channel.
+    short_description: Retrieve messages from an AMQP/AMQPS RabbitMQ queue.
     description:
         - This lookup uses a basic get to retrieve all, or a limited number C(count), messages from a RabbitMQ queue.
     options:
@@ -20,10 +20,14 @@ DOCUMENTATION = """
           - An URI connection string to connect to the AMQP/AMQPS RabbitMQ server.
           - For more information refer to the URI spec U(https://www.rabbitmq.com/uri-spec.html).
         required: True
-      channel:
+      queue:
         description:
-          - The channel/queue to get messages from.
+          - The queue to subscribe to.
         required: True
+      blocking:
+        description:
+          - If set, wait until at least one message is available on the queue for retrieval.
+          - If not set, return immediately with as many messages as requested.
       count:
         description:
           - How many messages to collect from the queue.
@@ -44,7 +48,7 @@ DOCUMENTATION = """
 EXAMPLES = """
 - name: Get all messages off a queue
   debug:
-    msg: "{{ lookup('rabbitmq', url='amqp://guest:guest@192.168.0.10:5672/%2F', channel='hello') }}"
+    msg: "{{ lookup('rabbitmq', url='amqp://guest:guest@192.168.0.10:5672/%2F', queue='hello') }}"
 
 
 # If you are intending on using the returned messages as a variable in more than
@@ -52,7 +56,7 @@ EXAMPLES = """
 
 - name: Get 2 messages off a queue and set a fact for re-use
   set_fact:
-    messages: "{{ lookup('rabbitmq', url='amqp://guest:guest@192.168.0.10:5672/%2F', channel='hello', count=2) }}"
+    messages: "{{ lookup('rabbitmq', url='amqp://guest:guest@192.168.0.10:5672/%2F', queue='hello', count=2) }}"
 
 - name: Dump out contents of the messages
   debug:
@@ -117,15 +121,15 @@ except ImportError:
 
 class LookupModule(LookupBase):
 
-    def run(self, terms, variables=None, url=None, channel=None, count=None):
+    def run(self, terms, variables=None, url=None, queue=None, count=None, blocking=False):
         if not HAS_PIKA:
             raise AnsibleError('pika python package is required for rabbitmq lookup.')
         if not url:
             raise AnsibleError('URL is required for rabbitmq lookup.')
-        if not channel:
-            raise AnsibleError('Channel is required for rabbitmq lookup.')
+        if not queue:
+            raise AnsibleError('Queue is required for rabbitmq lookup.')
 
-        display.vvv(u"terms:%s : variables:%s url:%s channel:%s count:%s" % (terms, variables, url, channel, count))
+        display.vvv(u"terms:%s : variables:%s url:%s queue:%s count:%s blocking:%s" % (terms, variables, url, queue, count, blocking))
 
         try:
             parameters = pika.URLParameters(url)
@@ -150,7 +154,7 @@ class LookupModule(LookupBase):
         idx = 0
 
         while True:
-            method_frame, properties, body = conn_channel.basic_get(queue=channel)
+            method_frame, properties, body = conn_channel.basic_get(queue=queue)
             if method_frame:
                 display.vvv(u"%s, %s, %s " % (method_frame, properties,
                                               to_text(body)))
@@ -175,9 +179,10 @@ class LookupModule(LookupBase):
                 idx += 1
                 if method_frame.message_count == 0 or idx == count:
                     break
-            # If we didn't get a method_frame, exit.
+            # If we didn't get a method_frame, exit unless blocking for a message
             else:
-                break
+                if not(blocking):
+                    break
 
         if connection.is_closing or connection.is_closed:
             return [ret]

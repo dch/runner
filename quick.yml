@@ -19,7 +19,7 @@
   #   debug:
   #     var: dmesg
   #     verbosity: 1
-  #
+
   - name: publish
     rabbitmq_basic_publish:
       url: "{{ rabbitmq_broker }}"
@@ -31,8 +31,20 @@
 
   - name: subscriber
     set_fact:
-      messages: "{{ lookup('rabbitmq', count=1, url=vars['rabbitmq_broker'], channel='api') }}"
+      messages: "{{ lookup('rabbitmq', count=1, url=vars['rabbitmq_broker'], queue='api') }}"
+    delegate_to: localhost
 
   - name: dump
     debug:
       var: messages
+
+  - name: blocking subscriber
+    set_fact:
+      messages: "{{ lookup('rabbitmq', count=1, url=vars['rabbitmq_broker'], queue='api', blocking=True) }}"
+    delegate_to: localhost
+
+  - name: dump
+    debug:
+      var: messages
+
+
