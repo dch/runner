@@ -1,0 +1,5 @@
+artifacts/
+tests/
+library/__pycache__/
+library/*.pyc
+facts/

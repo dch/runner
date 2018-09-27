@@ -1,0 +1,38 @@
+---
+# a minimal FreeBSD oriented ansible playbook
+# you can run this as follows:
+# ansible-playbook quick.yml -i localhost, -v -v
+# note the trailing , necessary to skip needing an inventory file
+- hosts: localhost
+  connection: local
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/local/bin/python2.7
+    # ansible_python_interpreter: /usr/local/bin/python3.6
+    rabbitmq_broker:  'amqp://guest:guest@127.0.0.1:5672/koans'
+  tasks:
+  # - name: dmesg
+  #   command: dmesg
+  #   register: dmesg
+
+  # - name: output
+  #   debug:
+  #     var: dmesg
+  #     verbosity: 1
+  #
+  - name: publish
+    rabbitmq_basic_publish:
+      url: "{{ rabbitmq_broker }}"
+      queue: api
+      durable: true
+      body: feck
+      content_type: text/plain
+    delegate_to: localhost
+
+  - name: subscriber
+    set_fact:
+      messages: "{{ lookup('rabbitmq', count=1, url=vars['rabbitmq_broker'], channel='api') }}"
+
+  - name: dump
+    debug:
+      var: messages
